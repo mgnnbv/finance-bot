@@ -2,7 +2,7 @@ from datetime import datetime
 
 import aiosqlite
 from aiogram.filters import Command, CommandStart, StateFilter
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 
@@ -98,7 +98,7 @@ async def add_category(message: Message, state: FSMContext):
         await state.clear()
         return
     else:
-        async with aiosqlite.connect("../Finance.db") as db:
+        async with aiosqlite.connect("Finance.db") as db:
             await db.execute(
                 '''INSERT INTO category (name)
                    VALUES (?)''', (data['name'],))

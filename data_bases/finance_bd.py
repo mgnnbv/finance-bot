@@ -1,7 +1,7 @@
 import sqlite3
 import aiosqlite
 
-with sqlite3.connect('../Finance.db') as db:
+with sqlite3.connect('Finance.db') as db:
     cursor = db.cursor()
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS category (
@@ -21,7 +21,7 @@ with sqlite3.connect('../Finance.db') as db:
 
 
 async def add_expense(result):
-    async with aiosqlite.connect("../Finance.db") as db:
+    async with aiosqlite.connect("Finance.db") as db:
         await db.execute(
             '''INSERT INTO finance (user_id, data_of_operation, amount, description, category_name)
                VALUES (?, ?, ?, ?, ?)''',
@@ -37,7 +37,7 @@ async def add_expense(result):
 
 
 async def category_check():
-    async with aiosqlite.connect('../Finance.db') as db:
+    async with aiosqlite.connect('Finance.db') as db:
         async with db.execute('''SELECT name FROM category WHERE name IS NOT NULL''') as cursor:
             rows = await cursor.fetchall()
 
@@ -45,7 +45,7 @@ async def category_check():
 
 
 async def report():
-    async with aiosqlite.connect('../Finance.db') as db:
+    async with aiosqlite.connect('Finance.db') as db:
         async with db.execute('''SELECT id, data_of_operation, amount, description FROM finance WHERE amount IS NOT NULL''') as cursor:
             rows = await cursor.fetchall()
 
