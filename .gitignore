@@ -1,10 +1,5 @@
 .venv
 __pycache__/
-data_bases
-fsm
-handlers
-keyboards
-middlewarres
 .idea
 .env
 Finance.db
