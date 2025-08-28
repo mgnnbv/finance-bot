@@ -9,3 +9,7 @@ class AddExpense(StatesGroup):
 
 class AddCategory(StatesGroup):
     chose_name = State()
+
+
+class VipReport(StatesGroup):
+    category_name = State()

@@ -11,7 +11,7 @@ from aiogram import Bot, Dispatcher, types
 from data_bases.finance_bd import init_db
 from handlers.handlers import router
 
-from middlewarres.middlewarre import SubscribeCheckMiddleware, LoggingMiddleware
+from middlewarres.middlewarre import SubscribeCheckMiddleware, LoggingMiddleware, SubscriptionMiddleware
 
 
 env = Env()
@@ -30,6 +30,7 @@ async def main():
     db = await aiosqlite.connect('Finance_for_bot.db')
     dp.message.middleware(SubscribeCheckMiddleware(db))
     dp.message.middleware(LoggingMiddleware(db))
+    dp.message.middleware(SubscriptionMiddleware())
 
     await bot.delete_webhook(drop_pending_updates=True)
 
@@ -37,6 +38,7 @@ async def main():
         types.BotCommand(command='/add_expense', description='Добавление расходов'),
         types.BotCommand(command='/report', description='Генерация отчета'),
         types.BotCommand(command='/categories', description='Просмотр всех категорий и добавление новой'),
+        types.BotCommand(command='/vip_report', description='Просмотр всех расходов в определенной категории'),
     ])
 
     await dp.start_polling(bot)

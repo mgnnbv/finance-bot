@@ -8,7 +8,7 @@ from aiogram.types import Message, CallbackQuery
 
 from data_bases.finance_bd import category_check, add_expense, report
 
-from fsm.fsm import AddExpense, AddCategory
+from fsm.fsm import AddExpense, AddCategory, VipReport
 
 from keyboards.keyboards import category_keyboard, subscribe_keyboard
 
@@ -98,6 +98,41 @@ async def choosing_description(message: Message, state: FSMContext):
     await message.answer('Поздравляю мы сохранили вашу трату в базу')
     await state.clear()
     await add_expense(result)
+
+
+@router.message(Command('vip_report'))
+async def vip_report_cmd(message: Message, has_subscription: bool, state: FSMContext):
+    if has_subscription:
+        await message.answer('Напишите категорию трат, которые вы хотите увидеть',
+                             reply_markup=category_keyboard())
+        await state.set_state(VipReport.category_name)
+    else:
+        await message.answer('У вас нет подписки')
+
+
+@router.message(VipReport.category_name)
+async def category_report(message: Message, state: FSMContext):
+    data = message.text.lower()[9:]
+    await state.clear()
+    async with aiosqlite.connect('Finance_for_bot.db') as db:
+        async with db.execute(
+                'SELECT amount, description, data_of_operation FROM finance WHERE category_name = ?',
+                (data,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+            if rows:
+
+                for row in rows:
+                    await message.answer(
+                        f'Все траты в категории: {data}\n'
+                        f'Сумма: {row[0]}р\n'
+                        f'Описание: {row[1]}\n'
+                        f'Дата совершения траты: {row[2]}'
+                    )
+
+            else:
+                await message.answer('У вас нет такой категории')
 
 
 @router.message(Command('report'))
