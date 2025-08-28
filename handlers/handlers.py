@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import aiosqlite
 from aiogram.filters import Command, CommandStart, StateFilter
@@ -10,7 +10,7 @@ from data_bases.finance_bd import category_check, add_expense, report
 
 from fsm.fsm import AddExpense, AddCategory
 
-from keyboards.keyboards import category_keyboard
+from keyboards.keyboards import category_keyboard, subscribe_keyboard
 
 router = Router()
 
@@ -19,12 +19,48 @@ BLOCKED = {'/categories', '/report', '/add_expense', '/start'}
 
 @router.message(CommandStart())
 async def start_cmd(message: Message):
-    await message.answer('Здраствуйте это бот для контроля ваших расходов и других финансовых операций')
+    await message.answer('Здраствуйте это бот для контроля ваших расходов и других финансовых операций',
+                         reply_markup=subscribe_keyboard())
+
+
+@router.message(StateFilter(None), Command('categories'))
+async def categories_cmd(message: Message, state: FSMContext):
+    result = await category_check()
+
+    if not result:
+        await message.answer('Категорий нет')
+    else:
+        for row in result:
+
+            await message.answer(row)
+
+    await message.answer('А теперь введите категорию которую хотите добавить')
+    await state.set_state(AddCategory.chose_name)
+
+
+@router.message(AddCategory.chose_name)
+async def add_category(message: Message, state: FSMContext):
+    await state.update_data(name=message.text.lower())
+    data = await state.get_data()
+    if data['name'] in BLOCKED:
+        await message.answer('Нельзя добавить такую категорию')
+        await state.clear()
+        return
+    else:
+        async with aiosqlite.connect("Finance_for_bot.db") as db:
+            await db.execute(
+                '''INSERT INTO category (name)
+                   VALUES (?)''', (data['name'],))
+
+            await db.commit()
+
+        await message.answer('Поздравляю категория была добавлена!!')
+        await state.clear()
 
 
 @router.message(StateFilter(None), Command('add_expense'))
 async def add_expense_cmd(message: Message, state: FSMContext):
-    async with aiosqlite.connect('../Finance.db') as db:
+    async with aiosqlite.connect('Finance_for_bot.db') as db:
         async with db.execute("SELECT name FROM category") as cursor:
             rows = await cursor.fetchall()
 
@@ -72,41 +108,55 @@ async def report_cmd(message: Message):
         await message.answer('Операций нет')
     else:
         for row in result:
-            await message.answer(row)
+            id_, date, amount, description = row
+            await message.answer(f"Операция №: {id_}\nДата: {date}\nСумма: {amount}р\nОписание: {description}")
 
 
-@router.message(StateFilter(None), Command('categories'))
-async def categories_cmd(message: Message, state: FSMContext):
-    result = await category_check()
+@router.message(Command('subscribe'))
+async def subscribe_cmd(message: Message):
+    user_id = message.from_user.id
+    active_sub = (datetime.now() + timedelta(days=60)).strftime('%Y-%m-%d %H:%M:%S')
+    subscribe_status = 1
+    async with aiosqlite.connect('Finance_for_bot.db') as db:
+        async with db.execute('SELECT user_id, subscribe_status, active_subscribe FROM subscribes WHERE user_id = ?', (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                if row[1] == 1:
+                    await message.answer(f'Ваша подписка все еще действует до: {row[2]}')
+                    return
+                else:
+                    await message.answer('Ваша подписка закончилась, мы продлим вам ее')
+                    await db.execute(
+                        '''INSERT OR REPLACE INTO subscribes(user_id, active_subscribe, subscribe_status)
+                           VALUES(?, ?, ?)''',
+                        (user_id, active_sub, subscribe_status))
+                    await message.answer('Поздравляю, ваша подписка продлена!!')
+            else:
+                await db.execute(
+                    '''INSERT OR REPLACE INTO subscribes(user_id, active_subscribe, subscribe_status)
+                       VALUES(?, ?, ?)''',
+                    (user_id, active_sub, subscribe_status))
 
-    if not result:
-        await message.answer('Категорий нет')
-    else:
-        for row in result:
-            await message.answer(row)
+                await db.commit()
 
-    await message.answer('А теперь введите категорию которую хотите добавить')
-    await state.set_state(AddCategory.chose_name)
+    await message.answer('Подписка оформлена, поздравляю!!!')
 
 
-@router.message(AddCategory.chose_name)
-async def add_category(message: Message, state: FSMContext):
-    await state.update_data(name=message.text.lower())
-    data = await state.get_data()
-    if data['name'] in BLOCKED:
-        await message.answer('Нельзя добавить такую категорию')
-        await state.clear()
-        return
-    else:
-        async with aiosqlite.connect("Finance.db") as db:
-            await db.execute(
-                '''INSERT INTO category (name)
-                   VALUES (?)''', (data['name'],))
+@router.message(Command('data_of_subscribe'))
+async def data_of_subscribe(message: Message):
+    user_id = message.from_user.id
+    async with aiosqlite.connect('Finance_for_bot.db') as db:
+        async with db.execute('''SELECT active_subscribe FROM subscribes WHERE user_id = ?''', (user_id,)) as cursor:
+            row = await cursor.fetchone()
 
-            await db.commit()
-
-        await message.answer('Поздравляю категория была добавлена!!')
-        await state.clear()
+            if row:
+                try:
+                    date = datetime.fromisoformat(row[0].strip('"'))
+                except ValueError:
+                    date = datetime.strptime(row[0].strip('"'), "%d.%m.%Y")
+                await message.answer(f'Подписку вы оформили до: {date:%d.%m.%Y %H:%M}')
+            else:
+                await message.answer('Подписки нет')
 
 
 @router.callback_query()
